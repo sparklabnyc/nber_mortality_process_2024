@@ -1,0 +1,275 @@
+---
+title: "Analysis"
+author:
+  - name: "Yuanyu Lu"
+    email: "yl5509@cumc.columbia.edu"
+institute: "Columbia University, Mailman School of Public Health"
+date: "2024-05-30"
+format: 
+  html:
+    toc: true
+---
+
+## Introduction
+
+I have selected ucod as Cause, Month, Sex, Age, countyoc as Fips from the raw data set, and summarized records of deaths with the same conditions. All the records in this data set are drawn from 1970.
+
+## Summary data
+
+### Whole Dataset
+
+```{r source, cache = FALSE}
+library(dplyr)
+library(ggplot2)
+library(ggrepel)
+library(stringr)
+```
+
+Here is the summarized data.
+
+```{r source1, cache = FALSE}
+setwd("/Users/yuanyulu/nber_mortality_process_2024")
+data <- read.csv("data/mort1970.csv")
+
+summary_data <- data %>%
+  select(ucod, monthdth, sex, age, countyoc) %>%
+  rename(cause = ucod, fips = countyoc) %>%
+  group_by(cause, monthdth, sex, age, fips) %>%
+  summarise(deaths = n(), .groups = 'drop') %>%
+  mutate(year = 1970)
+print(summary_data)
+```
+
+Because a single age value is not as informative as an age group in statistics, ages are grouped. Due to missing data, some of the records are clearly older than is possible, and if we set the upper age limit to 105, the aggregated result would be:
+
+```{r source2, cache = FALSE}
+age_labels <- c("<1", "1-4", "5-9", "10-14", "15-19", "20-24", "25-29",
+                "30-34", "35-39", "40-44", "45-49", "50-54", "55-59",
+                "60-64", "65-69", "70-74", "75-79", "80-84", "85+")
+age_bins <- c(-Inf, 1, seq(5, 85, by = 5), Inf)
+
+data_byage <- data %>%
+  filter(age<105) %>%
+  mutate(age_group = cut(age, breaks = age_bins, labels = age_labels, right = FALSE)) %>%
+  select(-age) %>%
+  rename(age=age_group)
+
+summary_agegroup <- data_byage %>%
+  select(ucod, monthdth, sex, age, countyoc) %>%
+  rename(cause = ucod, fips = countyoc) %>%
+  group_by(cause, monthdth, sex, age, fips) %>%
+  summarise(deaths = n(), .groups = 'drop') %>%
+  mutate(year = 1970) %>%
+  arrange(desc(deaths))
+print(summary_agegroup)
+
+```
+
+All the analysis below is based on this cleaned dataset.
+
+### County Mismatch Records
+
+Based on the table above, I counted the records whose county of residence and county of occurrence are different and calculated the proportion of the inconsistencies with all else being the same. The mismatch ratio shows as below.
+
+```{r source3, cache = FALSE}
+compare_data <- data_byage %>%
+  select(ucod, monthdth, sex, age, countyoc, countyrs) %>%
+  rename(cause = ucod, fips = countyoc) %>%
+  mutate(match = fips == countyrs) %>%
+  group_by(cause, monthdth, sex, age, fips) %>%
+  summarise(
+    deaths = n(),
+    matching_deaths = sum(match, na.rm = TRUE),
+    .groups = 'drop'
+  ) %>%
+  mutate(
+    unmatching_deaths = deaths - matching_deaths,
+    unmatching_ratio = unmatching_deaths / deaths,
+    year = 1970
+  ) %>%
+  select(-matching_deaths)
+
+overall_mismatch_ratio <- sum(compare_data$unmatching_deaths) / sum(compare_data$deaths)
+
+overall_data <- data.frame(
+  category = c("Match", "Mismatch"),
+  count = c(sum(compare_data$deaths) - sum(compare_data$unmatching_deaths), sum(compare_data$unmatching_deaths)),
+  percentage = c(1 - overall_mismatch_ratio, overall_mismatch_ratio)
+)
+
+ggplot(overall_data, aes(x = "", y = count, fill = category)) +
+  geom_bar(width = 1, stat = "identity") +
+  coord_polar("y", start = 0) +
+  theme_void() +
+  labs(title = "Mismatch Ratio in Total Deaths") +
+  geom_text(aes(label = scales::percent(percentage)),
+            position = position_stack(vjust = 0.5))
+```
+
+The proportion of mismatched records in all mismatched deaths for each county is shown in the ratio column in the following table:
+
+```{r source4, cache = FALSE}
+fips_mismatch_ratio <- data_byage %>%
+  select(ucod, monthdth, sex, age, countyoc, countyrs) %>%
+  mutate(countyrs = if_else(substr(countyrs, 1, 1) == "0" & nchar(countyrs) == 5,
+                            gsub("^0", "", countyrs), countyrs)) %>%
+  mutate(match = countyoc == countyrs) %>%
+  group_by(countyoc) %>%
+  summarise(
+    total_deaths = n(),
+    matching_deaths = sum(match, na.rm = TRUE),
+    unmatching_deaths = total_deaths - matching_deaths,
+    ratio_within = scales::percent(unmatching_deaths / total_deaths),
+    .groups = 'drop'
+  ) %>%
+  filter(unmatching_deaths > 0) %>%
+  mutate(ratio = scales::percent(unmatching_deaths / sum(unmatching_deaths))) %>%
+  arrange(desc(unmatching_deaths))
+
+print(fips_mismatch_ratio)
+```
+
+## Considering Cause
+
+### Whole Dataset
+
+```{r source5, cache = FALSE}
+summary_cause <- data_byage %>%
+  select(ucod) %>%
+  rename(cause = ucod) %>%
+  group_by(cause) %>%
+  summarise(deaths = n(), .groups = 'drop')
+
+top10_cause <- summary_cause %>%
+  top_n(10, deaths) %>%
+  arrange(desc(deaths))
+print(top10_cause)
+```
+
+```{r source6, cache = FALSE}
+ggplot(top10_cause, aes(x = reorder(cause, deaths), y = deaths)) +
+  geom_col(fill = "steelblue") +
+  geom_text(aes(label = deaths), vjust = -0.3, color = "black", size = 3.5) +
+  labs(title = "Top 10 Causes of Death in 1970",
+       x = "Cause of Death",
+       y = "Number of Deaths") +
+  theme_minimal() +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))
+```
+
+According to Appendix, the top ten causes of death in 1970 are ...
+
+### County Mismatch Records
+
+```{r source7, cache = FALSE}
+mismatch_cause <- data_byage %>%
+  filter(countyoc != countyrs) %>%
+  select(ucod) %>%
+  rename(cause = ucod) %>%
+  group_by(cause) %>%
+  summarise(deaths = n(), .groups = 'drop')
+
+top10_mismatch_cause <- mismatch_cause %>%
+  top_n(10, deaths) %>%
+  arrange(desc(deaths))
+
+causes <- data.frame(total=top10_cause$cause,mismatch=top10_mismatch_cause$cause)
+
+print(causes)
+```
+
+From the table above, we can see that cause of death does not significantly affect the inconsistency between residence and place of death, but we might want to look at causes of death with code 174 in the future.
+
+
+## Considering Age
+
+### Whole Dataset
+```{r source8, cache = FALSE}
+summary_agegroup_new <- summary_agegroup %>%
+  group_by(age) %>%
+  summarise(deaths = n(), .groups = 'drop')
+
+ggplot(summary_agegroup_new, aes(x = age, y = deaths)) +
+  geom_col(fill = "steelblue") +
+  geom_text(aes(label = deaths), vjust = -0.3, color = "black", size = 3.5) +
+  labs(title = "Deaths by Age Group",
+       x = "Age Group",
+       y = "Number of Deaths") +
+  theme_minimal() +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))
+```
+
+### County Mismatch Records
+We will use clean data to analyze this part.
+```{r source9, cache = FALSE}
+mismatch_age <- data_byage %>%
+  filter(countyoc != countyrs) %>%
+   group_by(age) %>%
+  summarise(deaths = n(), .groups = 'drop')
+
+ggplot(mismatch_age, aes(x = age, y = deaths)) +
+  geom_col(fill = "steelblue") +
+  geom_text(aes(label = deaths), vjust = -0.3, color = "black", size = 3.5) +
+  labs(title = "Deaths by Age Group for Mismatched County Data",
+       x = "Age Group",
+       y = "Number of Deaths") +
+  theme_minimal() +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))
+```
+
+It seems that both the total death records and the mismatched deaths records reach the peak between the ages of 75 and 79. For those mismatched deaths, before the age of 75, the cases of discordance between the place of death and the place of residence increased with the increase of age, and showed a decreasing trend after the age of 75, which may be related to the weakened mobility of the elderly.
+
+## Considering Race
+### Whole dataset
+```{r source10, cache = FALSE}
+race_labels <- c("Guamian", "White", "Black", "Indian (includes Aleuts and Eskimos)",
+                 "Chinese", "Japanese", "Hawaiian (includes part-Hawaiian)",
+                 "All other races", "Filipino")
+
+summary_race <- data %>%
+  select(ucod, monthdth, sex, age, race, countyoc) %>%
+  filter(age<105) %>%
+  rename(cause = ucod, fips = countyoc) %>%
+  group_by(cause, monthdth, sex, age, fips, race) %>%
+  summarise(deaths = n(), .groups = 'drop') %>%
+  mutate(year = 1970) %>%
+  mutate(race = factor(race, levels = 0:8, labels = race_labels)) %>%
+  arrange(desc(deaths))
+
+average_age_by_race <- summary_race %>%
+  group_by(race) %>%
+  summarise(mean_age = mean(age, na.rm = TRUE), .groups = 'drop')
+
+print(average_age_by_race)
+```
+
+```{r source11, cache = FALSE}
+ggplot(summary_race, aes(x = factor(race), y = age)) +
+  geom_violin() +
+  scale_x_discrete(labels = race_labels) +
+  labs(title = "Death Age Distribution by Race",
+       x = "Race",
+       y = "Age") +
+  theme_minimal() +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))
+```
+The White, Chinese, Japanese seem to have similar distribution with different means. The Japanese has the highest mean of death age, which is 68.51403 years.
+
+### County Mismatch Records
+```{r source12, cache = FALSE}
+mismatch_race <- data %>%
+  filter(countyoc != countyrs) %>%
+  mutate(race = factor(race, levels = 0:8, labels = race_labels)) %>%
+  group_by(race) %>%
+  summarise(deaths = n(), .groups = 'drop')
+
+ggplot(mismatch_race, aes(x = race, y = deaths)) +
+  geom_col(fill = "steelblue") +
+  geom_text(aes(label = deaths), vjust = -0.3, color = "black", size = 3.5) +
+  labs(title = "Deaths by Race Group for Mismatched County Data",
+       x = "Race Group",
+       y = "Number of Deaths") +
+  theme_minimal() +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))
+```
+The mismatched records mainly in the White and Black group, I think it has something to do with the demographics of 1970, the fact that there were more whites and blacks, and that Asians tended to stick together in fixed communities, probably reducing their likelihood of dying outside of the county they lived.
