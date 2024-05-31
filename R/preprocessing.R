@@ -19,6 +19,29 @@ output_path <- file.path(output_dir, "summary_1970_data.csv")
 
 write.csv(summary_data, output_path, row.names = FALSE)
 
+age_labels <- c("<1", "1-4", "5-9", "10-14", "15-19", "20-24", "25-29",
+                "30-34", "35-39", "40-44", "45-49", "50-54", "55-59",
+                "60-64", "65-69", "70-74", "75-79", "80-84", "85+")
+age_bins <- c(-Inf, 1, seq(5, 85, by = 5), Inf)
+
+data_byage <- data %>%
+  filter(age<105) %>%
+  mutate(age_group = cut(age, breaks = age_bins, labels = age_labels, right = FALSE)) %>%
+  select(-age) %>%
+  rename(age=age_group)
+
+summary_agegroup <- data_byage %>%
+  select(ucod, monthdth, sex, age, countyoc) %>%
+  rename(cause = ucod, fips = countyoc) %>%
+  group_by(cause, monthdth, sex, age, fips) %>%
+  summarise(deaths = n(), .groups = 'drop') %>%
+  mutate(year = 1970) %>%
+  arrange(desc(deaths))
+print(summary_agegroup)
+
+output_path <- file.path(output_dir, "summary_1970_data_byage.csv")
+write.csv(summary_agegroup, output_path, row.names = FALSE)
+
 compare_data <- data %>%
   select(ucod, monthdth, sex, age, countyoc, countyrs) %>%
   rename(cause = ucod, fips = countyoc) %>%
@@ -36,6 +59,8 @@ compare_data <- data %>%
   ) %>%
   select(-matching_deaths)
 
+overall_mismatch_ratio <- sum(compare_data$unmatching_deaths) / sum(compare_data$deaths)
+
 overall_data <- data.frame(
   category = c("Match", "Mismatch"),
   count = c(sum(compare_data$deaths) - sum(compare_data$unmatching_deaths), sum(compare_data$unmatching_deaths)),
@@ -50,7 +75,7 @@ ggplot(overall_data, aes(x = "", y = count, fill = category)) +
   geom_text(aes(label = scales::percent(percentage)),
             position = position_stack(vjust = 0.5))
 
-fips_mismatch_ratio <- data %>%
+fips_mismatch_ratio <- data_byage %>%
   select(ucod, monthdth, sex, age, countyoc, countyrs) %>%
   mutate(countyrs = if_else(substr(countyrs, 1, 1) == "0" & nchar(countyrs) == 5,
                             gsub("^0", "", countyrs), countyrs)) %>%
@@ -64,8 +89,10 @@ fips_mismatch_ratio <- data %>%
     .groups = 'drop'
   ) %>%
   filter(unmatching_deaths > 0) %>%
-  mutate(ratio = scales::percent(unmatching_deaths / sum(unmatching_deaths))) %>%
-  arrange(desc(unmatching_deaths))
+  mutate(ratio1 = scales::percent(unmatching_deaths / sum(unmatching_deaths))) %>%
+  mutate(ratio2 = scales::percent(unmatching_deaths / sum(total_deaths))) %>%
+  arrange(desc(unmatching_deaths)) %>%
+  select(-matching_deaths)
 
 
 
@@ -125,28 +152,6 @@ top10_mismatch_cause <- mismatch_cause %>%
 causes <- data.frame(total=top10_cause$cause,mismatch=top10_mismatch_cause$cause)
 
 #summary by age group
-age_labels <- c("<1", "1-4", "5-9", "10-14", "15-19", "20-24", "25-29",
-                "30-34", "35-39", "40-44", "45-49", "50-54", "55-59",
-                "60-64", "65-69", "70-74", "75-79", "80-84", "85+")
-age_bins <- c(-Inf, 1, seq(5, 85, by = 5), Inf)
-
-data_byage <- data %>%
-  filter(age<105) %>%
-  mutate(age_group = cut(age, breaks = age_bins, labels = age_labels, right = FALSE)) %>%
-  select(-age) %>%
-  rename(age=age_group)
-
-summary_agegroup <- data_byage %>%
-  select(ucod, monthdth, sex, age, countyoc) %>%
-  rename(cause = ucod, fips = countyoc) %>%
-  group_by(cause, monthdth, sex, age, fips) %>%
-  summarise(deaths = n(), .groups = 'drop') %>%
-  mutate(year = 1970) %>%
-  arrange(desc(deaths))
-print(summary_agegroup_clean)
-
-output_path <- file.path(output_dir, "summary_1970_data_byage.csv")
-write.csv(summary_agegroup, output_path, row.names = FALSE)
 
 summary_agegroup_new <- summary_agegroup %>%
   group_by(age) %>%
