@@ -8,7 +8,7 @@ Started on 2024-05-31
 
 ## Project description
 
-This code is used for the paper Name, Y., Parks, R.M. et al. (202X). Title with hyperlink. _Journal Name_.
+NBER Mortality Process 2024
 
 Aims:
 
