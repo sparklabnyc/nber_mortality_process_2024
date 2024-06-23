@@ -20,7 +20,7 @@ file.name = here(paste0(raw_mortality_data,year),paste0('MULT',year,'.',file.typ
 
 start.positions.1 =   c(	19,20,21,23,28,
                          29,35,38,43,44,
-                         45,47,51,52,53,
+                         45,
                          55,61,63,65,69,
                          70,83,84,85,102,
                          106,107,109,144,145,
@@ -45,7 +45,7 @@ start.positions.2 =   c(445,484,488)
 
 end.positions.1 	=   c(	19,20,22,25,28,
                         30,37,42,43,44,
-                        46,50,51,52,54,
+                        46,
                         56,62,63,66,69,
                         73,83,84,85,105,
                         106,107,109,144,145,
@@ -70,7 +70,7 @@ end.positions.2 	=   c(446,486,488)
 
 names.1 	= c('rectype','resident','stateocc_fips','countyocc_fips','pop_countyocc',
              'stateres_fips','countyres_fips','cityres_fips','pop_cityres','metro',
-             'ex_stateres','pmsares_fips','pop_countyres','pop_pmsa','cmsa_res',
+             'ex_stateres',
              'statebirth','educ','educ_recode','monthdth','sex',
              'age_detail','placedeath','marital','day_week','year',
              'injurywork','mannerdth','autopsy','activcode','place_injury',
