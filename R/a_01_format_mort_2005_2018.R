@@ -2,8 +2,6 @@ rm(list=ls())
 
 ## First step to load packages and file locations etc.
 project.folder = paste0(print(here::here()),'/')
-source(paste0(project.folder,'create_folder_structure.R'))
-source(paste0(functions.folder,'script_initiate.R'))
 
 library(dplyr)
 library(foreign)
